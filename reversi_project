@@ -1,0 +1,245 @@
+class Pos(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def is_valid(self):
+        return 0 <= self.x < 8 and 0 <= self.y < 8
+
+    def add(self, p):
+        return Pos(self.x + p.x, self.y + p.y)
+
+    def __add__(self, p):
+        return Pos(self.x + p.x, self.y + p.y)
+
+    def __eq__(self, p):
+        return self.x == p.x and self.y == p.y
+
+    def __str__(self):
+        return '{} {}'.format(self.x, self.y)
+
+
+AROUND = [
+    Pos(-1, -1), Pos(-1, 0), Pos(-1, 1),
+    Pos(0, -1), Pos(0, 1), Pos(1, -1),
+    Pos(1, 0), Pos(1,1)]
+
+
+class Board(object):
+    def __init__(self):
+        self.cell = [['E' for _ in range(8)] for _ in range(8)]
+        self.cell[3][4] = 'B'
+        self.cell[4][3] = 'B'
+        self.cell[3][3] = 'W'
+        self.cell[4][4] = 'W'
+        self.genmove_result = {'B': 0, 'W': 0}
+
+    def play(self, color, pos):
+        if not self.ask(color, pos):
+            return False
+
+        self._update(color, pos)
+
+        return True
+
+    #コマが置けるか確認（座標は指定）
+    def ask(self, color, pos):
+        if self.cell[pos.y][pos.x] != 'E':
+            return False
+
+        for direction in AROUND:
+            p = self._get_reverse_pos(color, pos, direction)
+
+            if p is not None:
+                return True
+
+        return False
+
+    #コマ反転（座標は指定）
+    def _update(self, color, pos):
+        self.cell[pos.y][pos.x] = color
+
+        for direction in AROUND:
+            target = self._get_reverse_pos(color, pos, direction)
+
+            if target is None:
+                continue
+
+            current = pos + direction
+
+            while current != target:
+                self.cell[current.y][current.x] = color
+                current += direction
+
+    #反転すべき方向における終端座標を探す
+    def _get_reverse_pos(self, color, pos, direction):
+        opposite = 'B' if color == 'W' else 'W'
+        current = pos + direction
+
+        if not current.is_valid():
+            return None
+        elif self.cell[current.y][current.x] != opposite:
+            return None
+
+        while True:
+            current = current + direction
+
+            if not current.is_valid():
+                return None
+            elif self.cell[current.y][current.x] == 'E':
+                return None
+            elif self.cell[current.y][current.x] == color:
+                return current
+
+    #対戦結果
+    def result(self):
+        countb = 0
+        countw = 0
+
+        for i in range(8):
+            for j in range(8):
+                if self.ask('B', Pos(j, i)) or self.ask('W', Pos(j, i)):
+                    return None
+                elif self.cell[i][j] == 'W':
+                    countw += 1
+                elif self.cell[i][j] == 'B':
+                    countb += 1
+
+        if countb > countw:
+            return 1 #B
+        elif countb == countw:
+            return 2 #D
+        elif countb < countw:
+            return 3 #W
+
+    def __str__(self):
+        return '\n'.join(''.join(r) for r in self.cell)
+
+
+class Node(object):
+    def __init__(self, board):
+        self.board = board
+        self.values = [
+            [10, 4, 8, 6, 6, 8, 4, 10],
+            [4, 2, 6, 4, 4, 6, 2, 4],
+            [8, 6, 4, 2, 2, 4, 6, 8],
+            [6, 4, 2, 2, 2, 2, 4, 6],
+            [6, 4, 2, 2, 2, 2, 4, 6],
+            [8, 6, 4, 2, 2, 4, 6, 8],
+            [4, 2, 6, 4, 4, 6, 2, 4],
+            [10, 4, 8, 6, 6, 8, 4, 10]]
+
+    #AI部分（改良必要部分）
+    def genmove(self, color):
+        move = None
+        maxval = 0
+
+        for y in range(8):
+            for x in range(8):
+                pos = Pos(x, y)
+                val = self.values[y][x]
+
+                if self.board.ask(color, pos) and val > maxval:
+                    move = pos
+                    maxval = val
+
+        if move is None:
+            self.board.genmove_result[color] = 1
+            return None
+
+        self.board.genmove_result[color] = 0
+        return move
+
+
+class Player(object):
+    def __init__(self):
+        self.board = Board()
+
+    #コマ置いて結果表示（座標は指定）
+    def play(self, color, pos):
+        if color != 'B' and color != 'W':
+            print('NG', flush=True)
+            return
+        elif not pos.is_valid():
+            print('NG', flush=True)
+            return
+
+        if self.board.play(color, pos):
+            print('OK', flush=True)
+        else:
+            print('NG', flush=True)
+
+    #コマ置けるか結果表示（座標は指定）
+    def ask(self, color, pos):
+        if color != 'B' and color != 'W':
+            print('NG', flush=True)
+            return
+        elif not pos.is_valid():
+            print('NG', flush=True)
+            return
+
+        if self.board.ask(color, pos):
+            print('OK', flush=True)
+        else:
+            print('NG', flush=True)
+
+    #コマ置いて結果表示（座標は探す）
+    def genmove(self, color):
+        if color != 'B' and color != 'W':
+            print('NG', flush=True)
+            return
+
+        node = Node(self.board)
+        pos = node.genmove(color)
+
+        if self.board.genmove_result['B'] == 1 and self.board.genmove_result['W'] == 1:
+            self.board.result()
+
+        if pos is not None:
+            self.board.play(color, pos)
+            print(pos, flush=True)
+        else:
+            print('NG', flush=True)
+
+    #対戦結果表示
+    def result(self):
+        score = self.board.result()
+
+        if score == 1:
+            print('B', flush=True)
+        elif score == 2:
+            print('D', flush=True)
+        elif score == 3:
+            print('W', flush=True)
+        else:
+            print('NG', flush=True)
+
+    #盤面表示
+    def showboard(self):
+        print(self.board, flush=True)
+
+
+def main():
+    player = Player()
+
+    while True:
+        cmd = input().split()
+
+        if cmd[0] == 'quit':
+            return
+        if cmd[0] == 'name':
+            print('sample', flush=True)
+        elif len(cmd) == 4 and cmd[0] == 'ask':
+            player.ask(cmd[1], Pos(int(cmd[2]), int(cmd[3])))
+        elif len(cmd) == 4 and cmd[0] == 'play':
+            player.play(cmd[1], Pos(int(cmd[2]), int(cmd[3])))
+        elif len(cmd) == 2 and cmd[0] == 'genmove':
+            player.genmove(cmd[1])
+        elif cmd[0] == 'result':
+            player.result()
+        elif cmd[0] == 'showboard':
+            player.showboard()
+
+
+if __name__ == '__main__':
+    main()
